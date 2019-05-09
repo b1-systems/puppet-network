@@ -24,13 +24,13 @@ rules and routing tables.
 
 Main class is used as entrypoint for general variables.
  
-It manages hostname configuration and has hiera hash lookups to generate the following, provided, resources:
+It manages hostname configuration and has hiera hash lookups to generate the following, provided, defined types:
 
-- network::interface - Define to manage network interfaces
-- network::route - Define to manage network routes
-- network::mroute - Define to manage network routes - Alternative with easier management of multiple routes per interface
-- network::routing_table - Define to manage iproute2 routing tables
-- network::rule - Define to manage network rules
+- `network::interface` - Define to manage network interfaces
+- `network::route` - Define to manage network routes
+- `network::mroute` - Define to manage network routes - Alternative with easier management of multiple routes per interface
+- `network::routing_table` - Define to manage iproute2 routing tables
+- `network::rule` - Define to manage network rules
 
 ## Setup
 
@@ -40,7 +40,7 @@ It manages hostname configuration and has hiera hash lookups to generate the fol
 * Puppet version >= 2.7.x
 * Facter version >= 1.6.2
 
-### Beginning with module network
+### Using this module
 
 The main class arguments can be provided either via Hiera (from Puppet 3.x) or direct parameters:
 
@@ -49,74 +49,75 @@ The main class arguments can be provided either via Hiera (from Puppet 3.x) or d
         }
 
 
-The module provides a generic network::conf define to manage any file in the config_dir_path which is:
+The module provides a generic `network::conf` type to manage any file in the `config_dir_path`, the latter being:
 
-  On 'Debian' osfamily: '/etc/network',
+`osfamily`|Path
+----------|----
+`Debian` | `/etc/network`
+`Redhat` | `/etc/sysconfig/network-scripts`
+`Suse` | `/etc/sysconfig/network`
 
-  On 'Redhat' osfamily: '/etc/sysconfig/network-scripts',
+Example usage:
 
-  On 'Suse' osfamily: '/etc/sysconfig/network',
+    network::conf { 'if-up.d/my_script':
+      template => 'site/network/my_script',
+    }
 
-        network::conf { 'if-up.d/my_script':
-          template => 'site/network/my_script',
-        }
+The module provides a cross OS compliant define to manage single interfaces: `network::interface`
 
-The module provides a cross OS compliant define to manage single interfaces: network::interface
+IMPORTANT NOTICE: On Debian, if you use `network::interface` once, you must provide ALL the `network::interface` defines for all your interfaces. It requires separate declarations for each IP stack on each interface.
+Please keep in mind that Debian and RedHat do not share the same approach in IPv4 / IPv6 management and thus require different hash structures.
 
-IMPORTANT NOTICE: On Debian if you use network::interface once you must provide ALL the network::interface defines for all your interfaces. It requires separate declarations for each IP stack on each interface.
-Please keep in mind Debian and RedHat do not share the same approach in IPv4 / IPv6 management and thus require different hash structures.
+To configure a DHCP interface:
 
-To configure a dhcp interface
+    network::interface { 'eth0':
+      enable_dhcp => true,
+    }
 
-        network::interface { 'eth0':
-          enable_dhcp => true,
-        }
+To configure a static interface with basic parameters:
 
-To configure a static interface with basic parameters
-
-        network::interface { 'eth1':
-          ipaddress => '10.42.42.50',
-          netmask   => '255.255.255.0',
-        }
-
+    network::interface { 'eth1':
+      ipaddress => '10.42.42.50',
+      netmask   => '255.255.255.0',
+    }
 
 ## Generic interface parameters configation examples
 
 You have different possible approaches in the usage of this module. Use the one you prefer.
 
-* Just use the network::interface defines:
+* Just use the `network::interface` defines:
 
-        network::interface { 'eth0':
+    network::interface { 'eth0':
+      enable_dhcp => true,
+    }
+
+    network::interface { 'eth1':
+      ipaddress => '10.42.42.50',
+      netmask   => '255.255.255.0',
+    }
+
+* Use the main network class and the `interfaces_hash` to configure all the interfaces 
+
+    class { 'network':
+      interfaces_hash => {
+        'eth0' => {
           enable_dhcp => true,
-        }
-
-        network::interface { 'eth1':
+        },
+        'eth1' => {
           ipaddress => '10.42.42.50',
           netmask   => '255.255.255.0',
-        }
-
-* Use the main network class and the interfaces_hash to configure all the interfaces 
-
-        class { 'network':
-          interfaces_hash => {
-            'eth0' => {
-              enable_dhcp => true,
-            },
-            'eth1' => {
-              ipaddress => '10.42.42.50',
-              netmask   => '255.255.255.0',
-            },
-          },
-        }
+        },
+      },
+    }
 
 Same information as Hiera data in yaml format:
 
-        network::interfaces_hash:
-          eth0:
-            enable_dhcp: true
-          eth1:
-            ipaddress: '10.42.42.50'
-            netmask: '255.255.255.0'
+    network::interfaces_hash:
+      eth0:
+        enable_dhcp: true
+      eth1:
+        ipaddress: '10.42.42.50'
+        netmask: '255.255.255.0'
 
 * Use the main network class and the usual stdmod parameters to manage the (main) network configuration file
 
@@ -126,121 +127,121 @@ Same information as Hiera data in yaml format:
 
   On 'Suse' osfamily: '/etc/sysconfig/network/ifcfg-eth0'
 
-        class { 'network':
-          config_file_template => 'site/network/network.conf.erb',
-        }
+    class { 'network':
+      config_file_template => 'site/network/network.conf.erb',
+    }
 
 * Manage the whole configuration directory
 
-        class { 'network':
-          config_dir_source  => 'puppet:///modules/site/network/conf/',
-        }
+    class { 'network':
+      config_dir_source  => 'puppet:///modules/site/network/conf/',
+    }
 
 * DO NOT automatically restart the network service after configuration changes (either via the main network class or via network::interfaces)
 
-        class { 'network':
-          config_file_notify => '',
-        }
+    class { 'network':
+      config_file_notify => '',
+    }
 
 
 * The network::interface exposes, and uses in the default templates, network configuration parameters available on Debian (most), RedHat (some), Suse (most) so it's flexible, easily expandable and should adapt to any need, but you may still want to provide a custom template with:
 
-        network::interface { 'eth0':
-          enable_dhcp => true,
-          template    => "site/network/interface/${::osfamily}.erb",
-        }
+    network::interface { 'eth0':
+      enable_dhcp => true,
+      template    => "site/network/interface/${::osfamily}.erb",
+    }
 
 ## Network routes management examples
 
 * The network::route can be used to define static routes on Debian and RedHat systems. The following example manages a static route on eth0
 
-        network::route { 'eth0':
-          ipaddress => [ '192.168.17.0', ],
-          netmask   => [ '255.255.255.0', ],
-          gateway   => [ '192.168.17.250', ],
-        }
+    network::route { 'eth0':
+      ipaddress => [ '192.168.17.0', ],
+      netmask   => [ '255.255.255.0', ],
+      gateway   => [ '192.168.17.250', ],
+    }
 
   On 'Debian' osfamily: it will create 2 files: '/etc/network/if-up.d/z90-route-eth0' and '/etc/network/if-down.d/z90-route-eth0',
 
   On 'RedHat' osfamily: it will create the file '/etc/sysconfig/network-scripts/route-eth0'
 
-  You can provide to the main network class the routes_hash parameter to manage all your routes via a hash.
+  You can provide to the main network class the `routes_hash` parameter to manage all your routes via a hash.
 
 * This example add 2 static routes on the interface bond2
 
-        network::route { 'bond2':
-          ipaddress => [ '192.168.2.0', '10.0.0.0', ],
-          netmask   => [ '255.255.255.0', '255.0.0.0', ],
-          gateway   => [ '192.168.1.1', '10.0.0.1', ],
+    network::route { 'bond2':
+      ipaddress => [ '192.168.2.0', '10.0.0.0', ],
+      netmask   => [ '255.255.255.0', '255.0.0.0', ],
+      gateway   => [ '192.168.1.1', '10.0.0.1', ],
+    }
+
+* To configure the default route on Suse, use the `routes_hash` parameter, like in the following example:
+
+    class { 'network':
+      routes_hash => {
+        'eth0' => {
+          ipaddress   => [ 'default', ],
+          gateway     => [ '192.168.0.1', ],
+          netmask     => [ '-', ],
+          interface   => 'eth0',
         }
+      }
+    }
 
-* To configure the default route on Suse, use the routes_hash parameter, like in the following example:
+* An alternative way to manage routes is using the `network::mroute` define, which expects a hash of one or more routes where you specify the network and the gateway (either as IP or device name):
 
-        class { 'network':
-          routes_hash => {
-            'eth0' => {
-              ipaddress   => [ 'default', ],
-              gateway     => [ '192.168.0.1', ],
-              netmask     => [ '-', ],
-              interface   => 'eth0',
-            }
-          }
-        }
+    network::mroute { 'bond2':
+      routes => {
+        '192.168.2.0/24' => '192.168.1.1',
+        '10.0.0.0/8'     => '10.0.0.1',
+        '80.81.82.0/16'  => 'bond0',
+      }
+    }
 
-* An alternative way to manage routes is using the network::mroute define, which expects a hash of one or more routes where you specify the network and the gateway (either as ip or device name):
+* The `network::routing_table` and `network::rule` classes can be used to configure IP rules and routing tables. Make sure to define a routing table before using it, like in this example:
 
-        network::mroute { 'bond2':
-          routes => {
-            '192.168.2.0/24' => '192.168.1.1',
-            '10.0.0.0/8'     => '10.0.0.1',
-            '80.81.82.0/16'  => 'bond0',
-          }
-        }
+    network::routing_table { 'vlan22':
+      table_id => '200',
+    }
 
-* The network::routing_table and network::rule classes can be used to configure ip rules and routing tables. Make sure to define a routing table before using it, like in this example:
-
-        network::routing_table { 'vlan22':
-          table_id => '200',
-        }
-
-        network::rule { 'eth0':
-          iprule => ['from 192.168.22.0/24 lookup vlan22', ],
-        }
+    network::rule { 'eth0':
+      iprule => ['from 192.168.22.0/24 lookup vlan22', ],
+    }
 
 You can then add routes to this routing table:
 
-       network::route { 'eth1':
-         ipaddress => [ '192.168.22.0', ],
-         netmask   => [ '255.255.255.0', ],
-         gateway   => [ '192.168.22.1', ],
-         table     => [ 'vlan22' ],
-       }
+    network::route { 'eth1':
+      ipaddress => [ '192.168.22.0', ],
+      netmask   => [ '255.255.255.0', ],
+      gateway   => [ '192.168.22.1', ],
+      table     => [ 'vlan22' ],
+    }
 
 If adding routes to a routing table on an interface with multiple routes, it
 is necessary to specify false or 'main' for the table on the other routes.
 The 'main' routing table is where routes are added by default. E.g. this:
 
-       network::route { 'bond0':
-         ipaddress => [ '192.168.2.0', '10.0.0.0', ]
-         netmask   => [ '255.255.255.0', '255.0.0.0', ],
-         gateway   => [ '192.168.1.1', '10.0.0.1', ],
-       }
+    network::route { 'bond0':
+     ipaddress => [ '192.168.2.0', '10.0.0.0', ]
+     netmask   => [ '255.255.255.0', '255.0.0.0', ],
+     gateway   => [ '192.168.1.1', '10.0.0.1', ],
+   }
 
-       network::route { 'bond0':
-         ipaddress => [ '192.168.3.0', ],
-         netmask   => [ '255.255.255.0', ],
-         gateway   => [ '192.168.3.1', ],
-         table     => [ 'vlan22' ],
-       }
+    network::route { 'bond0':
+     ipaddress => [ '192.168.3.0', ],
+     netmask   => [ '255.255.255.0', ],
+     gateway   => [ '192.168.3.1', ],
+     table     => [ 'vlan22' ],
+   }
 
 would need to become:
 
-       network::route { 'bond0':
-         ipaddress => [ '192.168.2.0', '10.0.0.0', '192.168.3.0', ]
-         netmask   => [ '255.255.255.0', '255.0.0.0', '255.255.255.0', ],
-         gateway   => [ '192.168.1.1', '10.0.0.1', '192.168.3.1', ],
-         table     => [ false, false, 'vlan22' ],
-       }
+    network::route { 'bond0':
+      ipaddress => [ '192.168.2.0', '10.0.0.0', '192.168.3.0', ]
+      netmask   => [ '255.255.255.0', '255.0.0.0', '255.255.255.0', ],
+      gateway   => [ '192.168.1.1', '10.0.0.1', '192.168.3.1', ],
+      table     => [ false, false, 'vlan22' ],
+    }
 
 The same applies if adding scope, source or gateway, i.e. false needs to be
 specified for those routes without values for those parameters, if defining
@@ -248,20 +249,20 @@ multiple routes for the same interface.
 
 The following definition:
 
-       network::route { 'bond2':
-         ipaddress => [ '0.0.0.0', '192.168.3.0' ]
-         netmask   => [ '0.0.0.0', '255.255.255.0' ],
-         gateway   => [ '192.168.3.1', false ],
-         scope     => [ false, 'link', ],
-         source    => [ false, '192.168.3.10', ],
-         table     => [ 'vlan22' 'vlan22', ],
-       }
+    network::route { 'bond2':
+      ipaddress => [ '0.0.0.0', '192.168.3.0' ]
+      netmask   => [ '0.0.0.0', '255.255.255.0' ],
+      gateway   => [ '192.168.3.1', false ],
+      scope     => [ false, 'link', ],
+      source    => [ false, '192.168.3.10', ],
+      table     => [ 'vlan22' 'vlan22', ],
+    }
 
-yields the following routes in table vlan22:
+yields the following routes in table `vlan22`:
 
-       # ip route show table vlan22
-       default via 192.168.3.1 dev bond2
-       192.168.3.0/255.255.255.0 dev bond2 scope link src 192.168.3.10
+    # ip route show table vlan22
+    default via 192.168.3.1 dev bond2
+    192.168.3.0/255.255.255.0 dev bond2 scope link src 192.168.3.10
 
 Normally the link level routing (192.168.3.0/255.255.255.0) is added
 automatically by the kernel when an interface is brought up. When using routing
@@ -279,7 +280,7 @@ Main class settings:
     network::gateway: 192.168.0.1 # Default gateway (on RHEL systems)
     network::hiera_merge: true # Use hiera_hash() instead of hiera() to resolve the values for the following hashes
 
-Configuration of interfaces (check ```network::interface``` for all the available params.
+Configuration of interfaces (check `network::interface` for all the available params.
 
 Single interface via dhcp:
 
@@ -309,7 +310,7 @@ Bond interface:
       bond_miimon: '100'
       bond_slaves: []
 
-Debian/Ubuntu IPv4/IPv6 management example for basic IP config, IP aliaseconfig and VLAN config :
+Debian/Ubuntu IPv4/IPv6 management example for basic IP config, IP alias config and VLAN config:
 
     'eth0:0v4':
        'enable':          'true'
@@ -423,7 +424,7 @@ Debian/Ubuntu IPv4/IPv6 management example for basic IP config, IP aliaseconfig 
        'gateway':         'X.X.X.1::1'
        'family':          'inet6'
 
-Configuration of multiple static routes (using the ```network::route``` define, when more than one route is added the elements of the arrays have to be ordered coherently):
+Configuration of multiple static routes (using the `network::route` defined type, when more than one route is added the elements of the arrays have to be ordered coherently):
 
     network::routes_hash:
       eth0:
@@ -438,7 +439,7 @@ Configuration of multiple static routes (using the ```network::route``` define, 
           - 174.136.107.1
 
 
-Configuration of multiple static routes (using the newer ```network::mroute``` define) you can specify as gateway either a device or an IP or also add a table reference:
+Configuration of multiple static routes (using the newer `network::mroute` defined type) you can specify as gateway either a device or an IP or also add a table reference:
 
     network::mroutes_hash:
       eth0:
